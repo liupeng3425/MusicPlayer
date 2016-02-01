@@ -82,13 +82,17 @@ public class MusicService extends Service {
         });
     }
 
+    private void sendUpdateBroadcast(String action){
+        Intent intent = new Intent(action);
+        sendBroadcast(intent);
+    }
+
     public int getCURRENT_PLAY() {
         return CURRENT_PLAY;
     }
 
     private void playNext() {
         CURRENT_PLAY = (CURRENT_PLAY + 1) % cursor.getCount();
-
         cursor.moveToPosition(CURRENT_PLAY);
         int musicPathIndex = cursor.getColumnIndex(MediaStore.Audio.Media.DATA);
         String musicPath = cursor.getString(musicPathIndex);
@@ -176,6 +180,7 @@ public class MusicService extends Service {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        sendUpdateBroadcast(Constants.ACTION_CHANGE_MUSIC);
     }
 
     @Override

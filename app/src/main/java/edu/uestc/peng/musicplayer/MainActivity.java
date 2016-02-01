@@ -1,24 +1,10 @@
 package edu.uestc.peng.musicplayer;
 
-/**
- * 使用 Mediaplayer 类来播放音乐。
- * <p/>
- * 首先搜索了存储卡根目录下的音乐文件（仅 .mp3 格式，在 musicFilter 类中修改即可增加更多的音乐格式），使用了 File Filter 来筛选文件。
- * 将文件名字和绝对路径分别存放在 songNameList 和 pathList 中，并利用这些来创建 ArrayAdapter。
- * <p/>
- * 用 ListView 显示歌曲列表。
- * <p/>
- * SeekBar 显示播放进度，同时具有跳转功能。
- * <p/>
- * 使用 ImageButton 实现了 播放/暂停、下一曲、上一曲 的按钮，实现了 播放/暂停 按钮的图片切换。
- * <p/>
- * 需要的改进的地方：不能搜索其他目录的歌曲、手机上没有歌曲时程序不能启动，闪退。
- * <p/>
- * 希望可以使用系统的数据库，查询到歌曲的信息，而不是显示文件名。
- */
-
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.database.Cursor;
 import android.net.Uri;
@@ -80,29 +66,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private MusicService musicService = null;
 
     private Cursor cursor;
-
-//    private Timer timer;
-
-//    private Handler handler = new Handler() {
-//        @Override
-//        public void handleMessage(Message msg) {
-//            super.handleMessage(msg);
-//            switch (msg.what) {
-//                case Constants.UPDATE_SEEK_BAR:
-//                    seekBar.setMax((int) getDurationByPosition(cursor, CURRENT_PLAY));
-//                    seekBar.setProgress((int) musicService.getCurrentPosition());
-//                    break;
-//                case Constants.UPDATE_TV_CURRENT_TIME:
-//                    tvCurTime.setText(String.format("%02d:%02d", musicService.getCurrentPosition() / 60000, musicService.getCurrentPosition() / 1000 % 60));
-//                    break;
-//                case Constants.UPDATE_TEXT_VIEWS:
-//                    setTextViews();
-//                    break;
-//                default:
-//                    break;
-//            }
-//        }
-//    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -236,6 +199,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         });
 
+        IntentFilter intentFilter = new IntentFilter(Constants.ACTION_CHANGE_MUSIC);
+
+        BroadcastReceiver changeMusicBroadcastReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                tvCurTime.setText(Constants.INIT_TIME);
+                setTextViews();
+                seekBar.setMax((int) getDurationByPosition(cursor, musicService.getCURRENT_PLAY()));
+            }
+        };
+
+        registerReceiver(changeMusicBroadcastReceiver, intentFilter);
 
     }
 
@@ -286,7 +261,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         c.moveToPosition(position);
         int titleColumn = c.getColumnIndex(MediaStore.Audio.Media.TITLE);
         int artistColumn = c.getColumnIndex(MediaStore.Audio.Media.ARTIST);
-        return c.getString(artistColumn) + " - " + c.getString(titleColumn);
+        int durationColumn = c.getColumnIndex(MediaStore.Audio.Media.DURATION);
+        return c.getString(artistColumn) + " - " + c.getString(titleColumn) + " - " +
+                String.format("%02d:%02d", c.getLong(durationColumn) / 1000 / 60, c.getLong(durationColumn) / 1000 % 60);
     }
 
     public long getDurationByPosition(Cursor cursor, int position) {
@@ -354,11 +331,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Runnable updateThread = new Runnable() {
             @Override
             public void run() {
-                seekBar.setMax((int) getDurationByPosition(cursor, musicService.getCURRENT_PLAY()));
                 seekBar.setProgress((int) musicService.getCurrentPosition());
                 tvCurTime.setText(String.format("%02d:%02d", musicService.getCurrentPosition() / 1000 / 60,
                         musicService.getCurrentPosition() / 1000 % 60));
-                setTextViews();
                 handler.postDelayed(this, 500);
             }
         };

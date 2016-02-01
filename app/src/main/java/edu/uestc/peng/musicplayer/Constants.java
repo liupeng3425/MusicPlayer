@@ -18,6 +18,7 @@ public class Constants {
     public static final int UPDATE_TEXT_VIEWS  = 2;
 
     public static final String ACTION_SERVICE_CONNECTED = "SERVICE_CONNECTED";
+    public static final String ACTION_CHANGE_MUSIC = "CHANGE_MUSIC";
 
     public static final String NO_MUSIC_FOUND = "没有找到歌曲";
 
