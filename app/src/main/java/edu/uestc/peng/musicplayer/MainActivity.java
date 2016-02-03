@@ -242,6 +242,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
     @Override
     protected void onStop() {
         super.onStop();
+        Log.e("MainActivity", "onStop");
         handler.removeCallbacks(updateThread);
         unbindService();
         unregisterReceiver(changeMusicBroadcastReceiver);
@@ -258,6 +259,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
     @Override
     protected void onRestart() {
         super.onRestart();
+        Log.e("MainActivity", "onRestart");
         setTextViews();
     }
 
