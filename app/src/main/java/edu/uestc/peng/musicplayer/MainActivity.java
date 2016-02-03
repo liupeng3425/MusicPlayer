@@ -1,8 +1,11 @@
 package edu.uestc.peng.musicplayer;
 
+import android.app.AlertDialog;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
@@ -17,6 +20,9 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.telecom.ConnectionService;
 import android.util.Log;
+import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -28,10 +34,8 @@ import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener, ServiceConnection {
+public class MainActivity extends BaseActivity implements View.OnClickListener {
 
     /**
      * 歌曲名字的列表
@@ -63,9 +67,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      */
     private ArrayAdapter<String> nameAdapter;
 
-    private MusicService musicService = null;
 
     private Cursor cursor;
+
+    BroadcastReceiver changeMusicBroadcastReceiver;
+
+    IntentFilter intentFilter;
+    private Handler handler;
+    private Runnable updateThread;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,6 +93,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         listView = (ListView) findViewById(R.id.listView);
         seekBar = (SeekBar) findViewById(R.id.seekBar);
 
+
         tvCurTime = (TextView) findViewById(R.id.tvCurTime);
         tvSongName = (TextView) findViewById(R.id.tvSongName);
         tvTotalTime = (TextView) findViewById(R.id.tvTotalTime);
@@ -90,6 +101,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         btnNext.setOnClickListener(this);
         btnPlayStop.setOnClickListener(this);
         btnPre.setOnClickListener(this);
+
+        tvSongName.setOnClickListener(this);
 
         songNameList = new ArrayList<>();
 
@@ -115,7 +128,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 "duration > 10000", null, null);
 
 
-        if (cursor != null) {
+        if (cursor != null && cursor.getCount() > 0) {
             for (int i = 0; i < cursor.getCount(); i++) {
                 songNameList.add(getInfoByPosition(cursor, i));
             }
@@ -135,14 +148,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
          */
         listView.setAdapter(nameAdapter);
 
-
-        /**
-         * player 默认加载第一首歌，adapter 的序号从 0 开始
-         *
-         * 同时也启动了服务。
-         */
-        startMusicService(cursor, 0, Constants.ACTION_SET_PLAYER);
-
+        bindService();
     }
 
     @Override
@@ -158,7 +164,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 setTextViews();
-                startMusicService(cursor, position, Constants.ACTION_PLAY_ANOTHER);
+                musicService.playAnother(position);
                 btnPlayStop.setImageResource(R.drawable.pause);
             }
 
@@ -194,66 +200,118 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         seekBar.getProgress() / 60000,
                         seekBar.getProgress() / 1000 % 60));
 
-                startMusicService(cursor, seekBar.getProgress(), Constants.ACTION_SEEK_TO);
-                btnPlayStop.setImageResource(R.drawable.pause);
+                musicService.seekTo(seekBar.getProgress());
+                btnPlayStop.setImageResource(R.drawable.pause);// TODO: 2016/2/2  
             }
         });
 
-        IntentFilter intentFilter = new IntentFilter(Constants.ACTION_CHANGE_MUSIC);
+        intentFilter = new IntentFilter(Constants.ACTION_CHANGE_MUSIC);
 
-        BroadcastReceiver changeMusicBroadcastReceiver = new BroadcastReceiver() {
+        changeMusicBroadcastReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                tvCurTime.setText(Constants.INIT_TIME);
-                setTextViews();
-                seekBar.setMax((int) getDurationByPosition(cursor, musicService.getCURRENT_PLAY()));
+                switch (intent.getAction()) {
+                    case Constants.ACTION_CHANGE_MUSIC:
+                        tvCurTime.setText(Constants.INIT_TIME);
+                        seekBar.setProgress(0);
+                        setTextViews();
+                        break;
+                }
+
             }
         };
 
         registerReceiver(changeMusicBroadcastReceiver, intentFilter);
 
+        handler = new Handler();
+        updateThread = new Runnable() {
+            @Override
+            public void run() {
+                if (musicService != null && musicService.isPlaying()) {
+                    seekBar.setProgress((int) musicService.getCurrentPosition());
+                    tvCurTime.setText(String.format("%02d:%02d", musicService.getCurrentPosition() / 1000 / 60,
+                            musicService.getCurrentPosition() / 1000 % 60));
+                }
+                handler.postDelayed(this, 500);
+            }
+        };
+        handler.post(updateThread);
+
     }
 
-    private void startMusicService(Cursor cursor, int position, String action) {
-        ComponentName componentName = new ComponentName(this, MusicService.class);
-        Intent intent = new Intent(action);
-        intent.setComponent(componentName);
-        switch (action) {
-            case Constants.ACTION_SEEK_TO:
-                intent.putExtra("position", position);
-                break;
-            case Constants.ACTION_SET_PLAYER:
-                intent.putExtra("musicPath", getMusicPathByPosition(cursor, position));
-                intent.putExtra("position", position);
-                break;
-            case Constants.ACTION_PLAY_ANOTHER:
-                intent.putExtra("musicPath", getMusicPathByPosition(cursor, position));
-                intent.putExtra("position", position);
-                break;
-            default:
-                break;
+    @Override
+    protected void onStop() {
+        super.onStop();
+        handler.removeCallbacks(updateThread);
+        unbindService();
+        unregisterReceiver(changeMusicBroadcastReceiver);
+    }
+
+//    @Override
+//    protected void onResume() {
+//        super.onResume();
+//        registerReceiver(changeMusicBroadcastReceiver, intentFilter);
+//        bindService();
+//    }
+
+
+    @Override
+    protected void onRestart() {
+        super.onRestart();
+        setTextViews();
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_BACK:
+                // 创建退出对话框
+                AlertDialog isExit = new AlertDialog.Builder(this).create();
+                // 设置对话框标题
+                isExit.setTitle("系统提示");
+                // 设置对话框消息
+                isExit.setMessage("确定要退出吗");
+                // 添加选择按钮并注册监听
+                isExit.setButton(DialogInterface.BUTTON_POSITIVE, "确定", listener);
+                isExit.setButton(DialogInterface.BUTTON_NEGATIVE, "取消", listener);
+                // 显示对话框
+                isExit.show();
         }
-        if (musicService == null)
-            bindService(intent, this, BIND_AUTO_CREATE);
-        else
-            startService(intent);
+        return super.onKeyDown(keyCode, event);
     }
 
-    private void startMusicService(String action) {
-        ComponentName componentName = new ComponentName(this, MusicService.class);
-        Intent intent = new Intent(action);
-        intent.setComponent(componentName);
-        if (musicService == null)
-            bindService(intent, this, BIND_AUTO_CREATE);
-        else
-            startService(intent);
+    DialogInterface.OnClickListener listener = new DialogInterface.OnClickListener() {
+        @Override
+        public void onClick(DialogInterface dialog, int which) {
+            switch (which) {
+                case AlertDialog.BUTTON_POSITIVE:
+                    handler.removeCallbacks(updateThread);
+                    musicService.stopSelf();
+                    unbindService();
+                    finish();
+                    break;
+                case AlertDialog.BUTTON_NEGATIVE:
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        menu.add("退出");
+        return true;
     }
 
-    //根据位置来获取歌曲位置
-    public String getMusicPathByPosition(Cursor c, int position) {
-        c.moveToPosition(position);
-        int dataColumn = c.getColumnIndex(MediaStore.Audio.Media.DATA);
-        return c.getString(dataColumn);
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        handler.removeCallbacks(updateThread);
+        musicService.stopSelf();
+        unbindService();
+        finish();
+        return super.onOptionsItemSelected(item);
     }
 
     //获取当前播放歌曲演唱者及歌名
@@ -277,6 +335,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         tvTotalTime.setText(String.format("%02d:%02d",
                 getDurationByPosition(cursor, musicService.getCURRENT_PLAY()) / 60 / 1000,
                 getDurationByPosition(cursor, musicService.getCURRENT_PLAY()) / 1000 % 60));
+        seekBar.setMax((int) getDurationByPosition(cursor, musicService.getCURRENT_PLAY()));
     }
 
     /**
@@ -291,10 +350,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
              * 点击下一首或者上一首的按钮时，开始播放上一曲或者下一曲。
              */
             case R.id.btnNext:
-                startMusicService(Constants.ACTION_PLAY_NEXT);
+                musicService.playNext();
+                btnPlayStop.setImageResource(R.drawable.pause);
                 break;
             case R.id.btnPre:
-                startMusicService(Constants.ACTION_PLAY_PRE);
+                musicService.playPre();
+                btnPlayStop.setImageResource(R.drawable.pause);
                 break;
 
             /**
@@ -303,47 +364,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.btnPlayStop:
                 playStop();
                 break;
+            case R.id.tvSongName:
+                Intent intent = new Intent(MainActivity.this, LrcActivity.class);
+                startActivity(intent);
+                break;
         }
     }
 
     /**
      * 如果是在暂停状态，继续播放，设置定时器，将 isPause 设置为 false，设置图标为 暂停。
-     * 如果正在播放，暂停，取消定时器，isPause 设置为 true，设置图标为 播放。
      * 最后一种情况，刚打开播放器直接点击播放按钮。
-     * 由于初始化的时候，已经默认加载了第一首歌，直接开始播放第一首歌。
      */
     private void playStop() {
-        startMusicService(Constants.ACTION_PLAY_OR_PAUSE);
-
-        if (!musicService.isPause()) {
+        musicService.playOrPause();
+        if (musicService.isPause()) {
             btnPlayStop.setImageResource(R.drawable.play);
         } else {
             btnPlayStop.setImageResource(R.drawable.pause);
         }
-    }
-
-    @Override
-    public void onServiceConnected(ComponentName name, IBinder service) {
-        Log.e("MusicPlayer", "onServiceConnected");
-        musicService = ((MusicService.MusicBinder) service).getService();
-
-        final Handler handler = new Handler();
-        Runnable updateThread = new Runnable() {
-            @Override
-            public void run() {
-                seekBar.setProgress((int) musicService.getCurrentPosition());
-                tvCurTime.setText(String.format("%02d:%02d", musicService.getCurrentPosition() / 1000 / 60,
-                        musicService.getCurrentPosition() / 1000 % 60));
-                handler.postDelayed(this, 500);
-            }
-        };
-
-        handler.postDelayed(updateThread, 500);
-    }
-
-    @Override
-    public void onServiceDisconnected(ComponentName name) {
-
     }
 
 }

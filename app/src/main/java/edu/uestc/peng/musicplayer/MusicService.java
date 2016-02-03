@@ -21,7 +21,6 @@ public class MusicService extends Service {
     private boolean isPause = true;
     private Cursor cursor;
 
-
     private int CURRENT_PLAY = 0;
 
     public boolean isPause() {
@@ -69,7 +68,6 @@ public class MusicService extends Service {
         mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
             @Override
             public void onCompletion(MediaPlayer mp) {
-                // TODO: 2016/1/30
                 playNext();
             }
         });
@@ -77,12 +75,17 @@ public class MusicService extends Service {
         mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
             @Override
             public void onPrepared(MediaPlayer mp) {
-                mp.start();
+                sendUpdateBroadcast(Constants.ACTION_CHANGE_MUSIC);
+                if (!isPause) {
+                    mp.start();
+                }
             }
         });
+
+        setPlayer(CURRENT_PLAY);
     }
 
-    private void sendUpdateBroadcast(String action){
+    private void sendUpdateBroadcast(String action) {
         Intent intent = new Intent(action);
         sendBroadcast(intent);
     }
@@ -91,85 +94,59 @@ public class MusicService extends Service {
         return CURRENT_PLAY;
     }
 
-    private void playNext() {
-        CURRENT_PLAY = (CURRENT_PLAY + 1) % cursor.getCount();
-        cursor.moveToPosition(CURRENT_PLAY);
-        int musicPathIndex = cursor.getColumnIndex(MediaStore.Audio.Media.DATA);
-        String musicPath = cursor.getString(musicPathIndex);
-        setPlayer(musicPath);
+    public boolean isPlaying() {
+        return mediaPlayer.isPlaying();
     }
 
-    private void playPre() {
+    public void playNext() {
+        CURRENT_PLAY = (CURRENT_PLAY + 1) % cursor.getCount();
+        isPause = false;
+        setPlayer(CURRENT_PLAY);
+    }
+
+    public void playPre() {
         CURRENT_PLAY--;
+        isPause = false;
         if (CURRENT_PLAY < 0) CURRENT_PLAY = cursor.getCount() - 1;
-        cursor.moveToPrevious();
-        int musicPathIndex = cursor.getColumnIndex(MediaStore.Audio.Media.DATA);
-        String musicPath = cursor.getString(musicPathIndex);
-        setPlayer(musicPath);
+        setPlayer(CURRENT_PLAY);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        switch (intent.getAction()) {
-            case Constants.ACTION_PLAY_OR_PAUSE:
-                playOrPause();
-                break;
-            case Constants.ACTION_PLAY_ANOTHER:
-                playAnother(intent.getStringExtra("musicPath"));
-                CURRENT_PLAY = intent.getIntExtra("position", 0);
-                break;
-            case Constants.ACTION_SET_PLAYER:
-                setPlayer(intent.getStringExtra("musicPath"));
-                CURRENT_PLAY = intent.getIntExtra("position", 0);
-                break;
-            case Constants.ACTION_PREPARE:
-                break;
-            case Constants.ACTION_SEEK_TO:
-                seekTo(intent.getIntExtra("position", 0));
-                break;
-            case Constants.ACTION_PLAY_NEXT:
-                playNext();
-                break;
-            case Constants.ACTION_PLAY_PRE:
-                playPre();
-                break;
-            default:
-                break;
-        }
-
-        return super.onStartCommand(intent, flags, startId);
+        return START_NOT_STICKY;
     }
 
-    private void seekTo(int position) {
+    public void seekTo(int position) {
+        isPause = false;
         mediaPlayer.seekTo(position);
-        isPause = false;
+        mediaPlayer.start();
     }
 
-    private void playAnother(String musicPath) {
+    public void playAnother(int position) {
         mediaPlayer.reset();
-        setPlayer(musicPath);
+        CURRENT_PLAY = position;
+        setPlayer(position);
         isPause = false;
     }
 
-    private void playOrPause() {
+    public void playOrPause() {
         if (mediaPlayer.isPlaying()) {
-            mediaPlayer.pause();
             isPause = true;
+            mediaPlayer.pause();
         } else {
-            mediaPlayer.start();
             isPause = false;
+            mediaPlayer.start();
         }
     }
 
     /**
      * 设置播放器的资源路径，使播放器完全做好播放的准备。
      * 同时设置歌曲名文本框和总时间文本框。
-     *
-     * @param musicPath 歌曲的绝对路径
      */
-    public void setPlayer(String musicPath) {
+    public void setPlayer(int position) {
         mediaPlayer.reset();
 
+        String musicPath = getMusicPathByPosition(position);
         try {
             mediaPlayer.setDataSource(musicPath);
         } catch (IOException e) {
@@ -180,7 +157,13 @@ public class MusicService extends Service {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        sendUpdateBroadcast(Constants.ACTION_CHANGE_MUSIC);
+    }
+
+    //根据位置来获取歌曲位置
+    public String getMusicPathByPosition(int position) {
+        cursor.moveToPosition(position);
+        int dataColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATA);
+        return cursor.getString(dataColumn);
     }
 
     @Override
