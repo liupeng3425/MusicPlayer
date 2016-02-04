@@ -244,17 +244,20 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
         super.onStop();
         Log.e("MainActivity", "onStop");
         handler.removeCallbacks(updateThread);
-        unbindService();
         unregisterReceiver(changeMusicBroadcastReceiver);
     }
 
-//    @Override
-//    protected void onResume() {
-//        super.onResume();
-//        registerReceiver(changeMusicBroadcastReceiver, intentFilter);
-//        bindService();
-//    }
+    @Override
+    protected void onResume() {
+        super.onResume();
+        bindService();
+    }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        unbindService();
+    }
 
     @Override
     protected void onRestart() {

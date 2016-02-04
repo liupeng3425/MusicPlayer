@@ -1,6 +1,11 @@
 package edu.uestc.peng.musicplayer;
 
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.IBinder;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -27,12 +32,12 @@ public class LrcActivity extends BaseActivity {
     private int mPlayTimerDuration = 1000;
     private Timer mTimer;
     private TimerTask mTask;
+    private BroadcastReceiver broadcastReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_lrc);
-        bindService();
         lrcView = (LrcView) findViewById(R.id.lrcView);
 
         lrcView.setListener(new ILrcView.LrcViewListener() {
@@ -45,20 +50,55 @@ public class LrcActivity extends BaseActivity {
         });
 
         lrcView.setLoadingTipText("Loading...");
+        broadcastReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                stopLrcPlay();
+                lrcView.setLrc(null);
+                readLrc(getLrcPath());
+            }
+        };
 
+        registerReceiver(broadcastReceiver, new IntentFilter(Constants.ACTION_CHANGE_MUSIC));
+
+        bindService();
+    }
+
+    private String getLrcPath(){
         String musicPath = musicService.getMusicPathByPosition(musicService.getCURRENT_PLAY());
         String lrc = musicPath.substring(0, musicPath.lastIndexOf('.')) + ".lrc";
+        return lrc;
+    }
 
-        File lrcFile = new File(lrc);
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        super.onServiceConnected(name, service);
+
+        readLrc(getLrcPath());
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        unbindService();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        unregisterReceiver(broadcastReceiver);
+    }
+
+    private boolean readLrc(String lrcPath){
+        File lrcFile = new File(lrcPath);
         if (lrcFile.exists()) {
-            StringBuffer stringBuffer = new StringBuffer();
-
+            StringBuilder stringBuilder = new StringBuilder();
             char[] chars = new char[1024];
             try {
                 BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(lrcFile)));
-                int lenth = -1;
-                while ((lenth = in.read(chars)) != -1) {
-                    stringBuffer.append(chars, 0, lenth);
+                int length = -1;
+                while ((length = in.read(chars)) != -1) {
+                    stringBuilder.append(chars, 0, length);
                 }
                 in.close();
             } catch (FileNotFoundException e) {
@@ -68,10 +108,13 @@ public class LrcActivity extends BaseActivity {
             }
 
             ILrcBuilder builder = new DefaultLrcBuilder();
-            List<LrcRow> rows = builder.getLrcRows(lrc);
+            List<LrcRow> rows = builder.getLrcRows(stringBuilder.toString());
 
             lrcView.setLrc(rows);
             beginLrcPlay();
+            return true;
+        } else {
+            return false;
         }
     }
 
