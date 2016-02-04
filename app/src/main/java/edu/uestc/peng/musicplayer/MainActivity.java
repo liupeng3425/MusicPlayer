@@ -264,6 +264,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
         super.onRestart();
         Log.e("MainActivity", "onRestart");
         setTextViews();
+        registerReceiver(changeMusicBroadcastReceiver, intentFilter);
     }
 
     @Override

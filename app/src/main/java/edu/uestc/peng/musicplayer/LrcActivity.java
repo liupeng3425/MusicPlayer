@@ -64,7 +64,7 @@ public class LrcActivity extends BaseActivity {
         bindService();
     }
 
-    private String getLrcPath(){
+    private String getLrcPath() {
         String musicPath = musicService.getMusicPathByPosition(musicService.getCURRENT_PLAY());
         String lrc = musicPath.substring(0, musicPath.lastIndexOf('.')) + ".lrc";
         return lrc;
@@ -84,12 +84,24 @@ public class LrcActivity extends BaseActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        bindService();
+    }
+
+    @Override
     protected void onStop() {
         super.onStop();
         unregisterReceiver(broadcastReceiver);
     }
 
-    private boolean readLrc(String lrcPath){
+    @Override
+    protected void onRestart() {
+        super.onRestart();
+        registerReceiver(broadcastReceiver, new IntentFilter(Constants.ACTION_CHANGE_MUSIC));
+    }
+
+    private boolean readLrc(String lrcPath) {
         File lrcFile = new File(lrcPath);
         if (lrcFile.exists()) {
             StringBuilder stringBuilder = new StringBuilder();
