@@ -24,7 +24,6 @@
             android:exported="true" />
 
         <activity android:name=".LrcActivity" />
-        <activity android:name=".BaseActivity"></activity>
     </application>
 
 </manifest>

@@ -20,11 +20,6 @@ public class BaseActivity extends AppCompatActivity implements ServiceConnection
         ComponentName componentName = new ComponentName(this, MusicService.class);
         intent = new Intent();
         intent.setComponent(componentName);
-        /**
-         * player 默认加载第一首歌，adapter 的序号从 0 开始
-         *
-         * 同时也启动了服务。
-         */
         startService(intent);
     }
 
