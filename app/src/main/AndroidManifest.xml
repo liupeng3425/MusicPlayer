@@ -23,7 +23,9 @@
             android:enabled="true"
             android:exported="true" />
 
-        <activity android:name=".LrcActivity" />
+        <activity
+            android:name=".LrcActivity"
+            android:label="Lyric" />
     </application>
 
 </manifest>

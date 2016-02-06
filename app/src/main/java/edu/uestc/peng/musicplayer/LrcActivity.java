@@ -6,9 +6,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.IBinder;
+import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -39,6 +42,8 @@ public class LrcActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_lrc);
         lrcView = (LrcView) findViewById(R.id.lrcView);
+        ActionBar actionBar = getSupportActionBar();
+        actionBar.setDisplayHomeAsUpEnabled(true);
 
         lrcView.setListener(new ILrcView.LrcViewListener() {
 
@@ -93,12 +98,23 @@ public class LrcActivity extends BaseActivity {
     protected void onStop() {
         super.onStop();
         unregisterReceiver(broadcastReceiver);
+        stopLrcPlay();
     }
 
     @Override
     protected void onRestart() {
         super.onRestart();
         registerReceiver(broadcastReceiver, new IntentFilter(Constants.ACTION_CHANGE_MUSIC));
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case android.R.id.home:
+                finish();
+                break;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     private boolean readLrc(String lrcPath) {
